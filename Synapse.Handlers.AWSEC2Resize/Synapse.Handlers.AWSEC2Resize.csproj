@@ -56,7 +56,9 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AWSEC2ResizeHandler.cs" />
+    <Compile Include="AwsServices.cs" />
     <Compile Include="Ec2Request.cs" />
+    <Compile Include="Ec2Response.cs" />
     <Compile Include="HandlerConfig.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

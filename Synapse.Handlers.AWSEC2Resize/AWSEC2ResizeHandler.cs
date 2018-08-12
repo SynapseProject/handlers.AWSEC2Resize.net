@@ -1,12 +1,11 @@
-﻿using Amazon;
-using Amazon.Runtime;
-using Amazon.Runtime.CredentialManagement;
-using Synapse.Core;
+﻿using Synapse.Core;
+using Synapse.Handlers.AWSEC2Resize;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Amazon.EC2;
+using Amazon.EC2.Model;
+using StatusType = Synapse.Core.StatusType;
 
 public class AWSEC2ResizeHandler : HandlerRuntimeBase
 {
@@ -22,6 +21,7 @@ public class AWSEC2ResizeHandler : HandlerRuntimeBase
         BranchStatus = StatusType.None,
         Sequence = int.MaxValue
     };
+    private readonly Ec2Response _response = new Ec2Response();
 
     public override ExecuteResult Execute(HandlerStartInfo startInfo)
     {
@@ -36,11 +36,64 @@ public class AWSEC2ResizeHandler : HandlerRuntimeBase
             message = "Processing request...";
             UpdateProgress(message, StatusType.Running);
             ValidateRequest(parms);
-
+            ProcessRequest(parms);
         }
-        catch (Exception ex) { }
+        catch (Exception ex)
+        {
+            UpdateProgress(ex.Message, StatusType.Failed);
+            _encounteredFailure = true;
+            _response.Summary = ex.Message;
+            _response.ExitCode = -1;
+        }
+        finally
+        {
+            message = "Serializing response...";
+            UpdateProgress(message);
+            try
+            {
+                _result.ExitData = _response;
+            }
+            catch (Exception ex)
+            {
+                _result.ExitData = ex.Message;
+            }
+        }
+        return _result;
+    }
 
-        return null;
+    private void ProcessRequest(Ec2Request parms)
+    {
+        string profile;
+        _config.AwsEnvironmentProfile.TryGetValue(parms.Environment, out profile);
+
+        // Is instance stopped
+        Instance instance = AwsServices.GetInstance(parms.InstanceId, parms.Region, profile);
+
+        if (instance != null)
+        {
+            if (instance.InstanceType == InstanceType.FindValue(parms.InstanceType.ToLower()))
+            {
+                _response.ExitCode = 0;
+                _response.Summary = "EC2 instance is already of the given type.";
+            }
+            else if (instance.State.Name != InstanceStateName.Stopped)
+            {
+                if (parms.StopRunningInstance)
+                {
+                    
+                }
+            }
+        }
+        else
+        {
+            throw new Exception("Specified instance is not found.");
+        }
+        // Stop instance
+
+
+        // Change instance type
+
+
     }
 
     public override object GetConfigInstance()
@@ -94,11 +147,11 @@ public class AWSEC2ResizeHandler : HandlerRuntimeBase
             {
                 throw new Exception("Environment can not be found.");
             }
-            if (!IsValidRegion(parms.Region))
+            if (!AwsServices.IsValidRegion(parms.Region))
             {
                 throw new Exception("AWS region is not valid.");
             }
-            if (!IsValidInstanceType(parms.InstanceType))
+            if (!AwsServices.IsValidInstanceType(parms.InstanceType))
             {
                 throw new Exception("EC2 instance type is not valid.");
             }
@@ -154,50 +207,5 @@ public class AWSEC2ResizeHandler : HandlerRuntimeBase
         }
         return isValid;
     }
-
-    private static bool IsValidRegion(string region)
-    {
-        return !string.IsNullOrWhiteSpace(region) && !RegionEndpoint.GetBySystemName(region).DisplayName.Contains("Unknown");
-    }
-
-    private static AWSCredentials GetAwsCredentials(string profileName = "")
-    {
-        if (string.IsNullOrWhiteSpace(profileName))
-        {
-            profileName = "default";
-        }
-        AWSCredentials awsCredentials = null;
-
-        CredentialProfileStoreChain chain = new CredentialProfileStoreChain();
-
-        chain.TryGetAWSCredentials(profileName, out awsCredentials);
-
-        return awsCredentials;
-    }
-
-    private static CredentialProfile GetCredentialProfile(string profileName = "")
-    {
-        if (string.IsNullOrWhiteSpace(profileName))
-        {
-            profileName = "default";
-        }
-        CredentialProfile credentialProfile = null;
-
-        CredentialProfileStoreChain chain = new CredentialProfileStoreChain();
-
-        chain.TryGetProfile(profileName, out credentialProfile);
-
-        return credentialProfile;
-    }
-
-    private static bool IsValidInstanceType(string instanceType)
-    {
-        string[] validInstanceTypes = {
-            "t2.nano", "t2.micro", "t2.small", "t2.medium", "t2.large", "t2.xlarge", "t2.2xlarge",
-            "m5.large", "m5.xlarge", "m5.2xlarge", "m5.4xlarge", "m5.12xlarge", "m5.24xlarge",
-            "m5d.large", "m5d.xlarge", "m5d.2xlarge", "m5d.4xlarge", "m5d.12xlarge", "m5d.24xlarge",
-            "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "m4.16xlarge"};
-
-        return Array.IndexOf(validInstanceTypes, instanceType) > -1 ? true : false;
-    }
 }
+
