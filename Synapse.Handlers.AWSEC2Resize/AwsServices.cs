@@ -217,5 +217,94 @@ namespace Synapse.Handlers.AWSEC2Resize
 
             return foundInstance;
         }
+
+        public static void ModifyInstance(string instanceId, string instanceType, string regionName, string profileName)
+        {
+            if (string.IsNullOrWhiteSpace(instanceId))
+            {
+                throw new Exception("Instance id is not specified.");
+            }
+
+            AWSCredentials creds = GetAWSCredentials(profileName);
+
+            if (creds == null)
+            {
+                throw new Exception("AWS credentials are not specified");
+            }
+
+            RegionEndpoint endpoint = RegionEndpoint.GetBySystemName(regionName);
+            if (endpoint.DisplayName.Contains("Unknown"))
+            {
+                throw new Exception("AWS region endpoint is not valid.");
+            }
+
+            try
+            {
+                using (AmazonEC2Client client = new AmazonEC2Client(creds, endpoint))
+                {
+                    ModifyInstanceAttributeRequest req = new ModifyInstanceAttributeRequest
+                    {
+                        InstanceId = instanceId,
+                        InstanceType = instanceType
+                    };
+                    client.ModifyInstanceAttribute(req);
+                }
+            }
+            catch (AmazonEC2Exception ex)
+            {
+                // Check the ErrorCode to see if the instance does not exist.
+                if ("InvalidInstanceID.NotFound" == ex.ErrorCode)
+                {
+                    throw new Exception($"EC2 instance {instanceId} does not exist.");
+                }
+
+                // The exception was thrown for another reason, so re-throw the exception.
+                throw;
+            }
+        }
+
+        public static void StartInstance(string instanceId, string regionName, string profileName)
+        {
+            if (string.IsNullOrWhiteSpace(instanceId))
+            {
+                throw new Exception("Instance id is not specified.");
+            }
+
+            AWSCredentials creds = GetAWSCredentials(profileName);
+
+            if (creds == null)
+            {
+                throw new Exception("AWS credentials are not specified");
+            }
+
+            RegionEndpoint endpoint = RegionEndpoint.GetBySystemName(regionName);
+            if (endpoint.DisplayName.Contains("Unknown"))
+            {
+                throw new Exception("AWS region endpoint is not valid.");
+            }
+
+            try
+            {
+                using (AmazonEC2Client client = new AmazonEC2Client(creds, endpoint))
+                {
+                    StartInstancesRequest req = new StartInstancesRequest
+                    {
+                        InstanceIds = new List<string>() { instanceId }
+                    };
+                    client.StartInstances(req);
+                }
+            }
+            catch (AmazonEC2Exception ex)
+            {
+                // Check the ErrorCode to see if the instance does not exist.
+                if ("InvalidInstanceID.NotFound" == ex.ErrorCode)
+                {
+                    throw new Exception($"EC2 instance {instanceId} does not exist.");
+                }
+
+                // The exception was thrown for another reason, so re-throw the exception.
+                throw;
+            }
+        }
     }
 }

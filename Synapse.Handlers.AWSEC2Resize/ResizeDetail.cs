@@ -1,7 +1,7 @@
 ﻿using System.Collections.Generic;
 using Amazon.EC2.Model;
 
-public class Ec2Request
+public class ResizeDetail
 {
     public string Environment { get; set; }
 
@@ -9,7 +9,7 @@ public class Ec2Request
 
     public string InstanceId { get; set; }
 
-    public string InstanceType { get; set; }
+    public string NewInstanceType { get; set; }
 
     public bool StopRunningInstance { get; set; } = false;
 
