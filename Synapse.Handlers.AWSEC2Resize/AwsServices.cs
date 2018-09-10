@@ -158,7 +158,7 @@ namespace Synapse.Handlers.AWSEC2Resize
             return foundInstance;
         }
 
-        public static Instance StopInstance(string instanceId, string regionName, string profileName)
+        public static void StopInstance(string instanceId, string regionName, string profileName)
         {
             if (string.IsNullOrWhiteSpace(instanceId))
             {
@@ -189,33 +189,19 @@ namespace Synapse.Handlers.AWSEC2Resize
                     {
                         InstanceIds = new List<string>() { instanceId }
                     };
-
-                    //                    do
-                    //                    {
-                    //                        StopInstancesResponse resp = client.StopInstances(req);
-                    //                        if (resp != null)
-                    //                        {
-                    //                            instances.AddRange(resp.Reservations.SelectMany(reservation => reservation.Instances).Where(x => x.InstanceId == instanceId));
-                    //                            req.NextToken = resp.NextToken;
-                    //                        }
-                    //                    } while (!string.IsNullOrWhiteSpace(req.NextToken));
-                }
-
-                if (instances.Count == 1)
-                {
-                    foundInstance = instances[0];
-                }
-                else
-                {
-                    throw new Exception("Error finding the specified instance.");
+                    client.StopInstances(req);
                 }
             }
-            catch (Exception ex)
+            catch (AmazonEC2Exception ex)
             {
-                throw new Exception($"Encountered exception while describing EC2 instances: {ex.Message}");
+                // Check the ErrorCode to see if the instance does not exist.
+                if ("InvalidInstanceID.NotFound" == ex.ErrorCode)
+                {
+                    throw new Exception($"EC2 instance {instanceId} does not exist.");
+                }
+                // The exception was thrown for another reason, so re-throw the exception.
+                throw;
             }
-
-            return foundInstance;
         }
 
         public static void ModifyInstance(string instanceId, string instanceType, string regionName, string profileName)

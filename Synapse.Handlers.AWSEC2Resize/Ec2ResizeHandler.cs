@@ -1,12 +1,11 @@
-﻿using Synapse.Core;
+﻿using Amazon.EC2.Model;
+using Newtonsoft.Json;
+using Synapse.Core;
 using Synapse.Handlers.AWSEC2Resize;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
-using Amazon.EC2;
-using Amazon.EC2.Model;
-using Newtonsoft.Json;
 using StatusType = Synapse.Core.StatusType;
 
 public class Ec2ResizeHandler : HandlerRuntimeBase
@@ -14,7 +13,6 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
     private HandlerConfig _config;
     private int _sequenceNumber = 0;
     private string _mainProgressMsg = "";
-    private string _subProgressMsg = "";
     private string _context = "Execute";
     private bool _encounteredFailure = false;
     private string _returnFormat = "json"; // Default return format
@@ -24,59 +22,62 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
         BranchStatus = StatusType.None,
         Sequence = int.MaxValue
     };
+    private const int FiveMinutes = 5000 * 60;
+
+    public override IHandlerRuntime Initialize(string values)
+    {
+        _config = DeserializeOrNew<HandlerConfig>(values);
+
+        return this;
+    }
 
     public override ExecuteResult Execute(HandlerStartInfo startInfo)
     {
-        ResizeResponse response = new ResizeResponse // Handler response
-        {
-            Results = new List<ResizeResult>()
-        };
+        ResizeResponse response = new ResizeResponse(); // Handler response
 
         try
         {
             _mainProgressMsg = "Deserializing incoming request...";
             UpdateProgress(_mainProgressMsg, StatusType.Initializing);
-            ResizeRequest parms = DeserializeOrNew<ResizeRequest>(startInfo.Parameters);
+            ResizeDetail parms = DeserializeOrNew<ResizeDetail>(startInfo.Parameters);
 
-            _mainProgressMsg = "Processing individual child request...";
+            _mainProgressMsg = "Processing request...";
             UpdateProgress(_mainProgressMsg, StatusType.Running);
 
-            if (parms?.Details != null)
+            if (parms != null)
             {
-                foreach (ResizeDetail detail in parms.Details)
+                bool subTaskSucceed = false;
+                try
                 {
-                    bool subTaskSucceed = false;
-                    try
+                    _mainProgressMsg = "Verifying request parameters...";
+                    UpdateProgress(_mainProgressMsg);
+                    if (ValidateRequest(parms))
                     {
-                        _subProgressMsg = "Verifying child request parameters...";
-                        UpdateProgress(_subProgressMsg);
-                        if (ValidateRequest(detail))
-                        {
-                            _subProgressMsg = "Executing request" + (startInfo.IsDryRun ? " in dry run mode..." : "...");
-                            UpdateProgress(_subProgressMsg);
-                            subTaskSucceed = ExecuteEc2Resize(detail, startInfo.IsDryRun); // TODO: Complete this
-                            _subProgressMsg = "Processed child request.";
-                            UpdateProgress(_subProgressMsg);
-                        }
+                        _mainProgressMsg = "Executing request" + (startInfo.IsDryRun ? " in dry run mode..." : "...");
+                        UpdateProgress(_mainProgressMsg);
+                        subTaskSucceed = ExecuteEc2Resize(parms, startInfo.IsDryRun); // TODO: Complete this
+                        _mainProgressMsg = "Processed request.";
+                        UpdateProgress(_mainProgressMsg);
                     }
-                    catch (Exception ex)
+                }
+                catch (Exception ex)
+                {
+                    _mainProgressMsg = ex.Message;
+                    UpdateProgress(_mainProgressMsg);
+                    subTaskSucceed = false;
+                }
+                finally
+                {
+                    Console.WriteLine(_mainProgressMsg);
+                    response.Results = new ResizeResult()
                     {
-                        _subProgressMsg = ex.Message;
-                        UpdateProgress(_subProgressMsg);
-                        subTaskSucceed = false;
-                    }
-                    finally
-                    {
-                        response.Results.Add(new ResizeResult()
-                        {
-                            ExitCode = subTaskSucceed ? 0 : -1,
-                            ExitSummary = _subProgressMsg,
-                            Environment = detail.Environment,
-                            InstanceId = detail.InstanceId,
-                            NewInstanceType = detail.NewInstanceType,
-                            Region = detail.Region
-                        });
-                    }
+                        ExitCode = subTaskSucceed ? 0 : -1,
+                        ExitSummary = _mainProgressMsg,
+                        Environment = parms.Environment,
+                        InstanceId = parms.InstanceId,
+                        NewInstanceType = parms.NewInstanceType,
+                        Region = parms.Region
+                    };
                 }
                 _result.Status = StatusType.Complete;
             }
@@ -99,39 +100,6 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
         _result.ExitData = JsonConvert.SerializeObject(response);
         return _result;
     }
-
-    //    private void ProcessRequest(Ec2ResizeRequest parms)
-    //    {
-    //        string profile;
-    //        _config.AwsEnvironmentProfile.TryGetValue(parms.Environment, out profile);
-    //
-    //        // Is instance stopped
-    //        Instance instance = AwsServices.GetInstance(parms.InstanceId, parms.Region, profile);
-    //
-    //        if (instance != null)
-    //        {
-    //            if (instance.InstanceType == InstanceType.FindValue(parms.InstanceType.ToLower()))
-    //            {
-    //                _response.ExitCode = 0;
-    //                _response.Summary = "EC2 instance is already of the given type.";
-    //            }
-    //            else if (instance.State.Name != InstanceStateName.Stopped)
-    //            {
-    //                if (parms.StopRunningInstance)
-    //                {
-    //
-    //                }
-    //            }
-    //        }
-    //        else
-    //        {
-    //            throw new Exception("Specified instance is not found.");
-    //        }
-    //        // Stop instance
-    //
-    //
-    //        // Change instance type
-    //    }
 
     public override object GetConfigInstance()
     {
@@ -229,36 +197,6 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
 
     public bool ExecuteEc2Resize(ResizeDetail request, bool isDryRun = false)
     {
-        //        string profile;
-        //        _config.AwsEnvironmentProfile.TryGetValue(parms.Environment, out profile);
-        //
-        //        // Is instance stopped
-        //        Instance instance = AwsServices.GetInstance(parms.InstanceId, parms.Region, profile);
-        //
-        //        if (instance != null)
-        //        {
-        //            if (instance.InstanceType == InstanceType.FindValue(parms.InstanceType.ToLower()))
-        //            {
-        //                _response.ExitCode = 0;
-        //                _response.Summary = "EC2 instance is already of the given type.";
-        //            }
-        //            else if (instance.State.Name != InstanceStateName.Stopped)
-        //            {
-        //                if (parms.StopRunningInstance)
-        //                {
-        //
-        //                }
-        //            }
-        //        }
-        //        else
-        //        {
-        //            throw new Exception("Specified instance is not found.");
-        //        }
-        //        // Stop instance
-        //
-        //
-        //        // Change instance type
-
         bool isSuccess = false;
 
 
@@ -275,21 +213,32 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
             {
                 if (instance.InstanceType != request.NewInstanceType.ToLower())
                 {
-                    AwsServices.StopInstance(request.InstanceId, request.Region, profile);
-
-                    string state;
-                    do
+                    // If different and allow stopping running instance, stop the instance
+                    if (!isDryRun)
                     {
-                        Thread.Sleep(5000);
-                        instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile);
-                        state = instance.State.Name.Value;
-                    } while (state != "stopped");
+                        AwsServices.StopInstance(request.InstanceId, request.Region, profile);
 
-                    AwsServices.ModifyInstance(request.InstanceId, request.NewInstanceType, request.Region, profile);
+                        string state;
+                        int counter = 5000;
 
-                    if (request.StartStoppedInstance)
-                    {
-                        AwsServices.StartInstance(request.InstanceId, request.Region, profile);
+                        do
+                        {
+                            if (counter > FiveMinutes)
+                            {
+                                throw new Exception("Failed to stop the EC2 instance within 5 minutes. Aborting the resizing operation.");
+                            }
+                            Thread.Sleep(5000);
+                            instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile);
+                            state = instance.State.Name.Value;
+                            counter += 5000;
+                        } while (state != "stopped");
+
+                        AwsServices.ModifyInstance(request.InstanceId, request.NewInstanceType, request.Region, profile);
+
+                        if (request.StartStoppedInstance)
+                        {
+                            AwsServices.StartInstance(request.InstanceId, request.Region, profile);
+                        }
                     }
                 }
                 else
@@ -299,17 +248,10 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
             }
             else
             {
+                // If it is the same, no action is taken
                 throw new Exception("Failed to obtain the EC2 instance detail.");
             }
-            // If it is the same, no action is taken
-
-            // If different and allow stopping running instance, stop the instance
-
-            // Wait until instance is stopped
-
-            // Resize the instance
-
-            // If instructed to start the instance, start the instance
+            isSuccess = true;
         }
         else
         {
