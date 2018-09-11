@@ -3,4 +3,6 @@
 public class HandlerConfig
 {
     public Dictionary<string, string> AwsEnvironmentProfile { get; set; }
+
+    public string CredentialFile { get; set; }
 }

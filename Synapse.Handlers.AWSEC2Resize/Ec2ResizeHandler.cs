@@ -128,7 +128,6 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
 
     private void UpdateProgress(string message, StatusType status = StatusType.Any, int seqNum = -1)
     {
-        _mainProgressMsg = _mainProgressMsg + Environment.NewLine + message;
         if (status != StatusType.Any)
         {
             _result.Status = status;
@@ -141,7 +140,7 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
         {
             _sequenceNumber++;
         }
-        OnProgress(_context, _mainProgressMsg, _result.Status, _sequenceNumber);
+        OnProgress(_context, message, _result.Status, _sequenceNumber);
     }
 
     private bool ValidateRequest(ResizeDetail parms)
@@ -205,8 +204,8 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
 
         if (!string.IsNullOrWhiteSpace(profile))
         {
-            // Describe instance
-            Instance instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile);
+            UpdateProgress("Getting EC2 instance details...");
+            Instance instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile, _config.CredentialFile);
 
             // Check if instance type is different
             if (instance != null)
@@ -216,28 +215,33 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
                     // If different and allow stopping running instance, stop the instance
                     if (!isDryRun)
                     {
-                        AwsServices.StopInstance(request.InstanceId, request.Region, profile);
+                        UpdateProgress("Stopping the EC2 instance...");
+                        AwsServices.StopInstance(request.InstanceId, request.Region, profile, _config.CredentialFile);
 
                         string state;
                         int counter = 5000;
 
                         do
                         {
+                            UpdateProgress("Waiting for EC2 to be stopped...");
                             if (counter > FiveMinutes)
                             {
                                 throw new Exception("Failed to stop the EC2 instance within 5 minutes. Aborting the resizing operation.");
                             }
                             Thread.Sleep(5000);
-                            instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile);
+                            instance = AwsServices.GetInstance(request.InstanceId, request.Region, profile, _config.CredentialFile);
                             state = instance.State.Name.Value;
                             counter += 5000;
                         } while (state != "stopped");
 
-                        AwsServices.ModifyInstance(request.InstanceId, request.NewInstanceType, request.Region, profile);
+
+                        UpdateProgress("Changing the EC2's instance type...");
+                        AwsServices.ModifyInstance(request.InstanceId, request.NewInstanceType, request.Region, profile, _config.CredentialFile);
 
                         if (request.StartStoppedInstance)
                         {
-                            AwsServices.StartInstance(request.InstanceId, request.Region, profile);
+                            UpdateProgress("Starting the EC2 instance...");
+                            AwsServices.StartInstance(request.InstanceId, request.Region, profile, _config.CredentialFile);
                         }
                     }
                 }

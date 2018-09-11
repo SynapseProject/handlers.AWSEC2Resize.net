@@ -11,7 +11,7 @@ namespace Synapse.Handlers.AWSEC2Resize
 {
     public class AwsServices
     {
-        public static AWSCredentials GetAWSCredentials(string profileName = "")
+        public static AWSCredentials GetAWSCredentials(string profileName = "", string credentialFile = null)
         {
             if (String.IsNullOrWhiteSpace(profileName))
             {
@@ -19,7 +19,7 @@ namespace Synapse.Handlers.AWSEC2Resize
             }
             AWSCredentials awsCredentials = null;
 
-            CredentialProfileStoreChain chain = new CredentialProfileStoreChain();
+            CredentialProfileStoreChain chain = new CredentialProfileStoreChain(credentialFile);
 
             chain.TryGetAWSCredentials(profileName, out awsCredentials);
 
@@ -46,48 +46,6 @@ namespace Synapse.Handlers.AWSEC2Resize
             return !String.IsNullOrWhiteSpace(region) && !RegionEndpoint.GetBySystemName(region).DisplayName.Contains("Unknown");
         }
 
-        public static List<Instance> DescribeEc2Instances(List<Filter> filters, string regionName, string profileName)
-        {
-            AWSCredentials creds = GetAWSCredentials(profileName);
-
-            if (creds == null)
-            {
-                throw new Exception("AWS credentials are not specified");
-            }
-
-            RegionEndpoint endpoint = RegionEndpoint.GetBySystemName(regionName);
-            if (endpoint.DisplayName.Contains("Unknown"))
-            {
-                throw new Exception("AWS region endpoint is not valid.");
-            }
-
-            List<Instance> instances = new List<Instance>();
-
-            try
-            {
-                using (AmazonEC2Client client = new AmazonEC2Client(creds, endpoint))
-                {
-                    DescribeInstancesRequest req = new DescribeInstancesRequest { Filters = filters };
-                    do
-                    {
-                        DescribeInstancesResponse resp = client.DescribeInstances(req);
-                        if (resp != null)
-                        {
-                            instances.AddRange(resp.Reservations.SelectMany(reservation => reservation.Instances));
-                            req.NextToken = resp.NextToken;
-                        }
-                    } while (!String.IsNullOrWhiteSpace(req.NextToken));
-                }
-
-            }
-            catch (Exception ex)
-            {
-                throw new Exception($"Encountered exception while describing EC2 instances: {ex.Message}");
-            }
-
-            return instances;
-        }
-
         public static bool IsValidInstanceType(string instanceType)
         {
             string[] validInstanceTypes = {
@@ -99,18 +57,18 @@ namespace Synapse.Handlers.AWSEC2Resize
             return Array.IndexOf(validInstanceTypes, instanceType) > -1 ? true : false;
         }
 
-        public static Instance GetInstance(string instanceId, string regionName, string profileName)
+        public static Instance GetInstance(string instanceId, string regionName, string profileName, string credentialFile = null)
         {
             if (string.IsNullOrWhiteSpace(instanceId))
             {
                 throw new Exception("Instance id is not specified.");
             }
 
-            AWSCredentials creds = GetAWSCredentials(profileName);
+            AWSCredentials creds = GetAWSCredentials(profileName, credentialFile);
 
             if (creds == null)
             {
-                throw new Exception("AWS credentials are not specified");
+                throw new Exception("AWS credentials are not specified.");
             }
 
             RegionEndpoint endpoint = RegionEndpoint.GetBySystemName(regionName);
@@ -158,14 +116,14 @@ namespace Synapse.Handlers.AWSEC2Resize
             return foundInstance;
         }
 
-        public static void StopInstance(string instanceId, string regionName, string profileName)
+        public static void StopInstance(string instanceId, string regionName, string profileName, string credentialFile = null)
         {
             if (string.IsNullOrWhiteSpace(instanceId))
             {
                 throw new Exception("Instance id is not specified.");
             }
 
-            AWSCredentials creds = GetAWSCredentials(profileName);
+            AWSCredentials creds = GetAWSCredentials(profileName, credentialFile);
 
             if (creds == null)
             {
@@ -177,9 +135,6 @@ namespace Synapse.Handlers.AWSEC2Resize
             {
                 throw new Exception("AWS region endpoint is not valid.");
             }
-
-            List<Instance> instances = new List<Instance>();
-            Instance foundInstance;
 
             try
             {
@@ -204,14 +159,14 @@ namespace Synapse.Handlers.AWSEC2Resize
             }
         }
 
-        public static void ModifyInstance(string instanceId, string instanceType, string regionName, string profileName)
+        public static void ModifyInstance(string instanceId, string instanceType, string regionName, string profileName, string credentialFile = null)
         {
             if (string.IsNullOrWhiteSpace(instanceId))
             {
                 throw new Exception("Instance id is not specified.");
             }
 
-            AWSCredentials creds = GetAWSCredentials(profileName);
+            AWSCredentials creds = GetAWSCredentials(profileName, credentialFile);
 
             if (creds == null)
             {
@@ -249,14 +204,14 @@ namespace Synapse.Handlers.AWSEC2Resize
             }
         }
 
-        public static void StartInstance(string instanceId, string regionName, string profileName)
+        public static void StartInstance(string instanceId, string regionName, string profileName, string credentialFile = null)
         {
             if (string.IsNullOrWhiteSpace(instanceId))
             {
                 throw new Exception("Instance id is not specified.");
             }
 
-            AWSCredentials creds = GetAWSCredentials(profileName);
+            AWSCredentials creds = GetAWSCredentials(profileName, credentialFile);
 
             if (creds == null)
             {
