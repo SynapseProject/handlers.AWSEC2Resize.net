@@ -22,12 +22,13 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
         BranchStatus = StatusType.None,
         Sequence = int.MaxValue
     };
-    private const int FiveMinutes = 5000 * 60;
+    private int _maxWaitTimeInMs = 5000 * 60;
 
     public override IHandlerRuntime Initialize(string values)
     {
         _config = DeserializeOrNew<HandlerConfig>(values);
-
+        // Smallest wait time is 60 seconds
+        _maxWaitTimeInMs = _config.MaxWaitTimeInMs >= 1000 * 60 ? _config.MaxWaitTimeInMs : _maxWaitTimeInMs;
         return this;
     }
 
@@ -55,8 +56,8 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
                     {
                         _mainProgressMsg = "Executing request" + (startInfo.IsDryRun ? " in dry run mode..." : "...");
                         UpdateProgress(_mainProgressMsg);
-                        subTaskSucceed = ExecuteEc2Resize(parms, startInfo.IsDryRun); // TODO: Complete this
-                        _mainProgressMsg = "Processed request.";
+                        subTaskSucceed = ExecuteEc2Resize(parms, startInfo.IsDryRun);
+                        _mainProgressMsg = "Request has been successfully executed.";
                         UpdateProgress(_mainProgressMsg);
                     }
                 }
@@ -68,7 +69,6 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
                 }
                 finally
                 {
-                    Console.WriteLine(_mainProgressMsg);
                     response.Results = new ResizeResult()
                     {
                         ExitCode = subTaskSucceed ? 0 : -1,
@@ -141,6 +141,7 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
             _sequenceNumber++;
         }
         OnProgress(_context, message, _result.Status, _sequenceNumber);
+        OnLogMessage(_context, message);
     }
 
     private bool ValidateRequest(ResizeDetail parms)
@@ -215,7 +216,11 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
                     // If different and allow stopping running instance, stop the instance
                     if (!isDryRun)
                     {
-                        UpdateProgress("Stopping the EC2 instance...");
+                        if (instance.State.Name.Value != "stopped" && !request.StopRunningInstance)
+                        {
+                            throw new Exception("No change is made since it is instructured not to stop running EC2 instance.");
+                        }
+                        UpdateProgress($"Stopping the EC2 instance {request.InstanceId} of type {instance.InstanceType}...");
                         AwsServices.StopInstance(request.InstanceId, request.Region, profile, _config.CredentialFile);
 
                         string state;
@@ -224,7 +229,7 @@ public class Ec2ResizeHandler : HandlerRuntimeBase
                         do
                         {
                             UpdateProgress("Waiting for EC2 to be stopped...");
-                            if (counter > FiveMinutes)
+                            if (counter > _maxWaitTimeInMs)
                             {
                                 throw new Exception("Failed to stop the EC2 instance within 5 minutes. Aborting the resizing operation.");
                             }

@@ -5,6 +5,8 @@ VisualStudioVersion = 15.0.27703.2047
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapse.Handlers.AWSEC2Resize", "Synapse.Handlers.AWSEC2Resize.csproj", "{10DBC8CE-E522-4BD0-A89E-C0E64CAB4D00}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Synapse.Handlers.AWSEC2ResizeTests", "..\Synapse.Handlers.AWSEC2ResizeTests\Synapse.Handlers.AWSEC2ResizeTests.csproj", "{F666F4E1-294F-4D91-8E28-04F25DCE7D96}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -15,6 +17,10 @@ Global
 		{10DBC8CE-E522-4BD0-A89E-C0E64CAB4D00}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{10DBC8CE-E522-4BD0-A89E-C0E64CAB4D00}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{10DBC8CE-E522-4BD0-A89E-C0E64CAB4D00}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F666F4E1-294F-4D91-8E28-04F25DCE7D96}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F666F4E1-294F-4D91-8E28-04F25DCE7D96}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F666F4E1-294F-4D91-8E28-04F25DCE7D96}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F666F4E1-294F-4D91-8E28-04F25DCE7D96}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
